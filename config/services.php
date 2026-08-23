@@ -66,4 +66,21 @@ return [
         'purok_id' => env('FLOOD_SENSOR_PUROK_ID'),
     ],
 
+    // SLA Resolution Tracker: how many hours a report can go without any
+    // update before it's flagged "stale", keyed by ReportPriority value.
+    // An untouched emergency report is a much bigger problem than an
+    // untouched low-priority one, so each tier gets its own window.
+    'sla' => [
+        'stale_after_hours' => [
+            'emergency' => (int) env('SLA_STALE_HOURS_EMERGENCY', 2),
+            'high' => (int) env('SLA_STALE_HOURS_HIGH', 24),
+            'medium' => (int) env('SLA_STALE_HOURS_MEDIUM', 72),
+            'low' => (int) env('SLA_STALE_HOURS_LOW', 168),
+            'unclassified' => (int) env('SLA_STALE_HOURS_UNCLASSIFIED', 72),
+        ],
+        // Don't re-notify admins about the same stale report more often
+        // than this, even if the scheduled check runs hourly.
+        'renotify_after_hours' => (int) env('SLA_RENOTIFY_AFTER_HOURS', 24),
+    ],
+
 ];

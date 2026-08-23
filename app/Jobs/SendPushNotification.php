@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\FcmInvalidTokenException;
 use App\Models\User;
 use App\Services\FcmService;
 use Illuminate\Bus\Queueable;
@@ -30,7 +31,20 @@ class SendPushNotification implements ShouldQueue
             return; // resident hasn't registered a device yet
         }
 
-        $fcm->sendToToken($this->recipient->fcm_token, $this->title, $this->body);
+        try {
+            $fcm->sendToToken($this->recipient->fcm_token, $this->title, $this->body);
+        } catch (FcmInvalidTokenException $e) {
+            // The token itself is dead — retrying won't help, and leaving
+            // it in place means every future alert fails the same way.
+            // Clear it so the resident just falls back to in-app-only
+            // notifications until they open the app and re-register.
+            $this->recipient->forceFill(['fcm_token' => null])->save();
+
+            logger()->info('Cleared invalid FCM token', [
+                'user_id' => $this->recipient->id,
+                'reason' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function failed(Throwable $e): void

@@ -72,4 +72,26 @@ class Report extends Model
     {
         return $query->where('classified_by_svm', false);
     }
+
+    /**
+     * Reports that are not resolved and haven't been updated within the
+     * SLA window for their priority (see config('services.sla')). Used
+     * by both the admin dashboard's SLA tracker and the scheduled
+     * stale-report notifier.
+     */
+    public function scopeStale(Builder $query): Builder
+    {
+        $thresholds = config('services.sla.stale_after_hours', []);
+
+        return $query
+            ->where('status', '!=', ReportStatus::Resolved->value)
+            ->where(function (Builder $outer) use ($thresholds): void {
+                foreach ($thresholds as $priority => $hours) {
+                    $outer->orWhere(function (Builder $inner) use ($priority, $hours): void {
+                        $inner->where('priority', $priority)
+                            ->where('updated_at', '<', now()->subHours($hours));
+                    });
+                }
+            });
+    }
 }

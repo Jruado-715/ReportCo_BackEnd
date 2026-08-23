@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\Exceptions\FcmInvalidTokenException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class FcmService
 {
+    // FCM v1 error codes that mean "this specific token is dead" —
+    // see https://firebase.google.com/docs/reference/fcm/rest/v1/ErrorCode
+    private const INVALID_TOKEN_ERROR_CODES = ['UNREGISTERED', 'INVALID_ARGUMENT'];
+
     public function sendToToken(string $token, string $title, string $body): void
     {
         $projectId = (string) config('services.fcm.project_id');
@@ -30,8 +35,34 @@ class FcmService
             ]);
 
         if ($response->failed()) {
+            if ($this->isInvalidTokenError($response->json())) {
+                throw new FcmInvalidTokenException(
+                    'FCM reported this device token as invalid or unregistered: '.$response->body()
+                );
+            }
+
             throw new RuntimeException('FCM delivery failed: '.$response->status().' '.$response->body());
         }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $body
+     */
+    private function isInvalidTokenError(?array $body): bool
+    {
+        $status = $body['error']['status'] ?? null;
+        if ($status === 'NOT_FOUND') {
+            return true;
+        }
+
+        $details = $body['error']['details'] ?? [];
+        foreach ($details as $detail) {
+            if (in_array($detail['errorCode'] ?? null, self::INVALID_TOKEN_ERROR_CODES, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function accessToken(string $clientEmail, string $privateKey): string

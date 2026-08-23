@@ -7,6 +7,7 @@ use App\Jobs\DeliverAnnouncement;
 use App\Models\Announcement;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Throwable;
 
 /**
  * This is the Emergency Override itself. It does NOT touch the SVM
@@ -20,6 +21,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class TriggerEmergencyOverride implements ShouldQueue
 {
+    public int $tries = 3;
+    public int $backoff = 30;
+
     public function handle(ThresholdCrossed $event): void
     {
         $senderId = config('services.flood_sensor.system_user_id') ?: User::where('role', 'system_admin')->value('id');
@@ -45,5 +49,14 @@ class TriggerEmergencyOverride implements ShouldQueue
         ]);
 
         DeliverAnnouncement::dispatch($announcement);
+    }
+
+    public function failed(ThresholdCrossed $event, Throwable $e): void
+    {
+        logger()->error('TriggerEmergencyOverride failed', [
+            'reading_id' => $event->reading->id,
+            'water_level' => $event->reading->water_level,
+            'error' => $e->getMessage(),
+        ]);
     }
 }

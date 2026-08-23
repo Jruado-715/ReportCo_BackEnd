@@ -15,3 +15,9 @@ Artisan::command('inspire', function () {
 // `php artisan schedule:work` alongside it locally, or a real cron entry
 // calling `php artisan schedule:run` every minute in production).
 Schedule::job(new RefreshClusters)->everyFifteenMinutes();
+
+// SLA Resolution Tracker: flags reports that have gone quiet past their
+// priority's SLA window and notifies barangay admins. Runs hourly since
+// the shortest window (emergency, 2h default) still gives useful lead
+// time; see config('services.sla').
+Schedule::command('reports:notify-stale')->hourly();

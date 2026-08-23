@@ -8,10 +8,14 @@ use App\Models\User;
 use App\Services\ReportNotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Bus\Queueable;
+use Throwable;
 
 class NotifyFloodAlertCleared implements ShouldQueue
 {
     use Queueable;
+
+    public int $tries = 3;
+    public int $backoff = 30;
 
     public function handle(FloodAlertCleared $event): void
     {
@@ -37,5 +41,13 @@ class NotifyFloodAlertCleared implements ShouldQueue
                 );
             }
         });
+    }
+
+    public function failed(FloodAlertCleared $event, Throwable $e): void
+    {
+        logger()->error('NotifyFloodAlertCleared failed', [
+            'reading_id' => $event->reading->id,
+            'error' => $e->getMessage(),
+        ]);
     }
 }
