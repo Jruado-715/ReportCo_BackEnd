@@ -40,20 +40,25 @@ class DeliverAnnouncement implements ShouldQueue
                 // Every resident in scope gets the in-app notification,
                 // regardless of whether they've registered a device —
                 // that's what makes it "in-app" rather than push-only.
-                $notifications->send(
-                    $resident,
-                    $this->announcement->title,
-                    $this->announcement->message,
-                    null,
-                    $this->announcement->type,
-                );
+                // firstOrCreate keeps this idempotent if the job retries.
+                $notifications->sendForAnnouncement($resident, $this->announcement);
 
+                // Push is best-effort and fully decoupled from the in-app
+                // notification written above. It normally runs in its own
+                // job; the try/catch only matters when the queue is running
+                // synchronously (QUEUE_CONNECTION=sync), where a push
+                // failure would otherwise abort the fan-out to the
+                // remaining residents.
                 if ($resident->fcm_token !== null) {
-                    SendPushNotification::dispatch(
-                        $resident,
-                        title: $this->announcement->title,
-                        body: $this->announcement->message,
-                    );
+                    try {
+                        SendPushNotification::dispatch(
+                            $resident,
+                            title: $this->announcement->title,
+                            body: $this->announcement->message,
+                        );
+                    } catch (Throwable $e) {
+                        report($e);
+                    }
                 }
             }
         });

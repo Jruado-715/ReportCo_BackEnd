@@ -32,21 +32,29 @@ class TriggerEmergencyOverride implements ShouldQueue
             return;
         }
 
-        $announcement = Announcement::create([
-            // A seeded system/service account, not a human admin — see
-            // config('services.flood_sensor.system_user_id'). Simpler
-            // than making `sent_by` nullable just for this one case.
-            'sent_by' => $senderId,
-            'purok_id' => config('services.flood_sensor.purok_id'), // null = whole barangay
-            'title' => 'Flood warning: evacuate low-lying areas now',
-            'message' => sprintf(
-                'Water level at the barangay sensor reached %.1f cm, above the %.1f cm safety threshold. Please move to higher ground and follow barangay instructions.',
-                (float) $event->reading->water_level,
-                (float) config('services.flood_sensor.threshold_cm'),
-            ),
-            'type' => 'emergency',
-            'target_scope' => config('services.flood_sensor.purok_id') ? 'purok' : 'barangay',
-        ]);
+        // Keyed on the triggering reading so a retried listener (tries = 3)
+        // reuses the same announcement instead of creating a second one.
+        // The safe->unsafe transition itself is already de-duplicated by the
+        // cache flag in IotReadingController, so there is exactly one
+        // ThresholdCrossed — and one reading id — per flood episode.
+        $announcement = Announcement::firstOrCreate(
+            ['iot_reading_id' => $event->reading->id],
+            [
+                // A seeded system/service account, not a human admin — see
+                // config('services.flood_sensor.system_user_id'). Simpler
+                // than making `sent_by` nullable just for this one case.
+                'sent_by' => $senderId,
+                'purok_id' => config('services.flood_sensor.purok_id'), // null = whole barangay
+                'title' => 'Flood warning: evacuate low-lying areas now',
+                'message' => sprintf(
+                    'Water level at the barangay sensor reached %.1f cm, above the %.1f cm safety threshold. Please move to higher ground and follow barangay instructions.',
+                    (float) $event->reading->water_level,
+                    (float) config('services.flood_sensor.threshold_cm'),
+                ),
+                'type' => 'emergency',
+                'target_scope' => config('services.flood_sensor.purok_id') ? 'purok' : 'barangay',
+            ],
+        );
 
         DeliverAnnouncement::dispatch($announcement);
     }

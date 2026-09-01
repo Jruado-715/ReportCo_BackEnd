@@ -6,12 +6,17 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['sent_by', 'purok_id', 'title', 'message', 'type', 'target_scope'])]
+#[Fillable(['sent_by', 'iot_reading_id', 'purok_id', 'title', 'message', 'type', 'target_scope'])]
 class Announcement extends Model
 {
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sent_by');
+    }
+
+    public function iotReading(): BelongsTo
+    {
+        return $this->belongsTo(IotReading::class);
     }
 
     public function purok(): BelongsTo
